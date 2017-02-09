@@ -1,0 +1,15 @@
+{
+  "name": "pg-sql-migrate",
+  "version": "0.0.0",
+  "description": "Migrates pg database schema.",
+  "main": "index.js",
+  "repository": "Timer/pg-sql-migrate",
+  "author": "Joe Haddad <timer150@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "co": "^4.6.0"
+  },
+  "peerDependencies": {
+    "pg": "^6.1.2"
+  }
+}
