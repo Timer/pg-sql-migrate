@@ -1,4 +1,6 @@
 const co = require('co')
+const fs = require('fs')
+const path = require('path')
 
 function migrate({
   client,
@@ -20,7 +22,7 @@ function migrate({
       cleanup = client.end.bind(client)
     } else if (pool) {
       yield new Promise((resolve, reject) => {
-        pg.connect(function(err, client, done) {
+        pool.connect(function(err, client, done) {
           if (err) {
             reject(err)
             return
@@ -31,10 +33,12 @@ function migrate({
             client.end()
             done(new Error('Trash this connection, please.'))
           }
+          resolve()
         })
       })
     }
 
+    const location = path.resolve(migrationsPath)
     const migrations = yield new Promise((resolve, reject) => {
       fs.readdir(location, (err, files) => {
         if (err) {
@@ -81,7 +85,7 @@ function migrate({
       )`
     )
     let dbMigrations = yield conn.query(
-      `SELECT id, name, up, down FROM "${table}" ORDER BY id ASC`,
+      `SELECT id, name, up, down FROM "${table}" ORDER BY id ASC`
     )
     dbMigrations = dbMigrations.rows
 
@@ -112,7 +116,7 @@ function migrate({
           yield conn.query(migration.up)
           yield conn.query(
             `INSERT INTO "${table}" (id, name, up, down) VALUES ($1, $2, $3, $4)`,
-            [migration.id, migration.name, migration.up, migration.down],
+            [migration.id, migration.name, migration.up, migration.down]
           )
           yield conn.query('COMMIT')
         } catch (err) {
@@ -122,9 +126,9 @@ function migrate({
       }
     }
   }).then(() => {
-    cleanup()
+    if (typeof cleanup === 'function') cleanup()
   }).catch(e => {
-    cleanup()
+    if (typeof cleanup === 'function') cleanup()
     throw e
   })
 }
