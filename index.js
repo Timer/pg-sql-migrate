@@ -1,6 +1,7 @@
 const co = require('co')
 const fs = require('fs')
 const path = require('path')
+const debug = require('debug')('pg-sql-migrate')
 
 function migrate({
   client,
@@ -16,6 +17,7 @@ function migrate({
       throw new Error('You must specify a client *OR* pool.')
     }
 
+    debug('connecting to database ...')
     if (client) {
       client.connect()
       conn = client
@@ -38,6 +40,7 @@ function migrate({
       })
     }
 
+    debug('connected.')
     const location = path.resolve(migrationsPath)
     const migrations = yield new Promise((resolve, reject) => {
       fs.readdir(location, (err, files) => {
@@ -57,6 +60,7 @@ function migrate({
       throw new Error(`No migration files found in '${location}'.`)
     }
 
+    debug('loaded %d migrations', migrations.length)
     yield Promise.all(migrations.map(migration => new Promise((resolve, reject) => {
       const filename = path.join(location, migration.filename)
       fs.readFile(filename, 'utf-8', (err, data) => {
@@ -76,6 +80,7 @@ function migrate({
       })
     })))
 
+    debug('ensuring migration table (%s) exists', table)
     yield conn.query(
       `CREATE TABLE IF NOT EXISTS "${table}" (
         id   INTEGER PRIMARY KEY,
@@ -84,15 +89,19 @@ function migrate({
         down TEXT    NOT NULL
       )`
     )
+
+    debug('listing existing migrations ...')
     let dbMigrations = yield conn.query(
       `SELECT id, name, up, down FROM "${table}" ORDER BY id ASC`
     )
     dbMigrations = dbMigrations.rows
+    debug('... has %d migrations', dbMigrations.length)
 
     const lastMigration = migrations[migrations.length - 1]
     for (const migration of dbMigrations.slice().sort((a, b) => Math.sign(b.id - a.id))) {
       if (!migrations.some(x => x.id === migration.id) ||
         (force === 'last' && migration.id === lastMigration.id)) {
+        debug('rolling back migration %d', migration.id)
         yield conn.query('BEGIN')
         try {
           yield conn.query(migration.down)
@@ -111,6 +120,7 @@ function migrate({
     const lastMigrationId = dbMigrations.length ? dbMigrations[dbMigrations.length - 1].id : 0
     for (const migration of migrations) {
       if (migration.id > lastMigrationId) {
+        debug('applying migration %d', migration.id)
         yield conn.query('BEGIN')
         try {
           yield conn.query(migration.up)
@@ -125,6 +135,8 @@ function migrate({
         }
       }
     }
+
+    debug('done')
   }).then(() => {
     if (typeof cleanup === 'function') cleanup()
   }).catch(e => {
