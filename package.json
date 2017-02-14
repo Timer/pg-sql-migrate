@@ -1,6 +1,6 @@
 {
   "name": "pg-sql-migrate",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Migrates pg database schema.",
   "main": "index.js",
   "repository": "Timer/pg-sql-migrate",
