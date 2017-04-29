@@ -3,17 +3,19 @@ const fs = require('fs')
 const path = require('path')
 const debug = require('debug')('pg-sql-migrate')
 
-function migrate({
-  client,
-  pool,
-  force = false,
-  table = 'migrations',
-  migrationsPath = './migrations'
-} = {}) {
+function migrate(
+  {
+    client,
+    pool,
+    force = false,
+    table = 'migrations',
+    migrationsPath = './migrations',
+  } = {}
+) {
   let conn
   let cleanup
   return co(function*() {
-    if (client && pool || !client && !pool) {
+    if ((client && pool) || (!client && !pool)) {
       throw new Error('You must specify a client *OR* pool.')
     }
 
@@ -47,11 +49,13 @@ function migrate({
         if (err) {
           reject(err)
         } else {
-          resolve(files
-            .map(x => x.match(/^(\d+).(.*?)\.sql$/))
-            .filter(x => x !== null)
-            .map(x => ({ id: Number(x[1]), name: x[2], filename: x[0] }))
-            .sort((a, b) => Math.sign(a.id - b.id)))
+          resolve(
+            files
+              .map(x => x.match(/^(\d+).(.*?)\.sql$/))
+              .filter(x => x !== null)
+              .map(x => ({ id: Number(x[1]), name: x[2], filename: x[0] }))
+              .sort((a, b) => Math.sign(a.id - b.id))
+          )
         }
       })
     })
@@ -61,24 +65,29 @@ function migrate({
     }
 
     debug('loaded %d migrations', migrations.length)
-    yield Promise.all(migrations.map(migration => new Promise((resolve, reject) => {
-      const filename = path.join(location, migration.filename)
-      fs.readFile(filename, 'utf-8', (err, data) => {
-        if (err) {
-          reject(err)
-        } else {
-          const [up, down] = data.split(/^--\s+?down/mi)
-          if (!down) {
-            const message = `The ${migration.filename} file does not contain '-- Down' separator.`
-            reject(new Error(message))
-          } else {
-            migration.up = up.replace(/^--.*?$/gm, '').trim()
-            migration.down = down.replace(/^--.*?$/gm, '').trim()
-            resolve()
-          }
-        }
-      })
-    })))
+    yield Promise.all(
+      migrations.map(
+        migration =>
+          new Promise((resolve, reject) => {
+            const filename = path.join(location, migration.filename)
+            fs.readFile(filename, 'utf-8', (err, data) => {
+              if (err) {
+                reject(err)
+              } else {
+                const [up, down] = data.split(/^--\s+?down/im)
+                if (!down) {
+                  const message = `The ${migration.filename} file does not contain '-- Down' separator.`
+                  reject(new Error(message))
+                } else {
+                  migration.up = up.replace(/^--.*?$/gm, '').trim()
+                  migration.down = down.replace(/^--.*?$/gm, '').trim()
+                  resolve()
+                }
+              }
+            })
+          })
+      )
+    )
 
     debug('ensuring migration table (%s) exists', table)
     yield conn.query(
@@ -99,13 +108,17 @@ function migrate({
 
     const lastMigration = migrations[migrations.length - 1]
     for (const migration of dbMigrations.slice().sort((a, b) => Math.sign(b.id - a.id))) {
-      if (!migrations.some(x => x.id === migration.id) ||
-        (force === 'last' && migration.id === lastMigration.id)) {
+      if (
+        !migrations.some(x => x.id === migration.id) ||
+        (force === 'last' && migration.id === lastMigration.id)
+      ) {
         debug('rolling back migration %d', migration.id)
         yield conn.query('BEGIN')
         try {
           yield conn.query(migration.down)
-          yield conn.query(`DELETE FROM "${table}" WHERE id = $1`, [migration.id])
+          yield conn.query(`DELETE FROM "${table}" WHERE id = $1`, [
+            migration.id,
+          ])
           yield conn.query('COMMIT')
           dbMigrations = dbMigrations.filter(x => x.id !== migration.id)
         } catch (err) {
@@ -117,7 +130,9 @@ function migrate({
       }
     }
 
-    const lastMigrationId = dbMigrations.length ? dbMigrations[dbMigrations.length - 1].id : 0
+    const lastMigrationId = dbMigrations.length
+      ? dbMigrations[dbMigrations.length - 1].id
+      : 0
     for (const migration of migrations) {
       if (migration.id > lastMigrationId) {
         debug('applying migration %d', migration.id)
@@ -137,12 +152,14 @@ function migrate({
     }
 
     debug('done')
-  }).then(() => {
-    if (typeof cleanup === 'function') cleanup()
-  }).catch(e => {
-    if (typeof cleanup === 'function') cleanup()
-    throw e
   })
+    .then(() => {
+      if (typeof cleanup === 'function') cleanup()
+    })
+    .catch(e => {
+      if (typeof cleanup === 'function') cleanup()
+      throw e
+    })
 }
 
 module.exports = migrate
