@@ -2,6 +2,7 @@ const co = require('co')
 const fs = require('fs')
 const path = require('path')
 const debug = require('debug')('pg-sql-migrate')
+const crypto = require('crypto')
 
 function migrate(
   {
@@ -10,6 +11,7 @@ function migrate(
     force = false,
     table = 'migrations',
     migrationsPath = './migrations',
+    checkHash = false,
   } = {}
 ) {
   let conn
@@ -81,6 +83,10 @@ function migrate(
                 } else {
                   migration.up = up.replace(/^--.*?$/gm, '').trim()
                   migration.down = down.replace(/^--.*?$/gm, '').trim()
+                  migration.hash = crypto
+                    .createHash('sha512')
+                    .update(data.replace(/\r\n/g, '\n'))
+                    .digest('hex')
                   resolve()
                 }
               }
@@ -95,32 +101,49 @@ function migrate(
         id integer primary key,
         name text not null,
         up text not null,
-        down text not null
+        down text not null,
+        hash text not null
       )`
     )
 
     debug('listing existing migrations ...')
     let dbMigrations = yield conn.query(
-      `select id, name, up, down from "${table}" order by id asc`
+      `select id, name, up, down, hash from "${table}" order by id asc`
     )
     dbMigrations = dbMigrations.rows
     debug('... has %d migrations', dbMigrations.length)
 
+    let firstMismatch = -1
+    for (const { id, hash } of dbMigrations) {
+      const file = migrations.find(x => x.id === id)
+      if (file == null) {
+        continue
+      }
+      if (file.hash !== hash && (firstMismatch === -1 || id < firstMismatch)) {
+        firstMismatch = id
+      }
+    }
+    if (checkHash && firstMismatch !== -1) {
+      debug('... %d has a hash mismatch, rolling back ...', firstMismatch)
+    }
+
     const lastMigration = migrations[migrations.length - 1]
-    for (const migration of dbMigrations.slice().sort((a, b) => Math.sign(b.id - a.id))) {
+    for (const {
+      id,
+      down,
+    } of dbMigrations.slice().sort((a, b) => Math.sign(b.id - a.id))) {
       if (
-        !migrations.some(x => x.id === migration.id) ||
-        (force === 'last' && migration.id === lastMigration.id)
+        !migrations.some(x => x.id === id) ||
+        (checkHash && firstMismatch !== -1 && id >= firstMismatch) ||
+        (force === 'last' && id === lastMigration.id)
       ) {
-        debug('rolling back migration %d', migration.id)
+        debug('rolling back migration %d', id)
         yield conn.query('begin')
         try {
-          yield conn.query(migration.down)
-          yield conn.query(`delete from "${table}" where id = $1`, [
-            migration.id,
-          ])
+          yield conn.query(down)
+          yield conn.query(`delete from "${table}" where id = $1`, [id])
           yield conn.query('commit')
-          dbMigrations = dbMigrations.filter(x => x.id !== migration.id)
+          dbMigrations = dbMigrations.filter(x => x.id !== id)
         } catch (err) {
           yield conn.query('rollback')
           throw err
@@ -133,15 +156,15 @@ function migrate(
     const lastMigrationId = dbMigrations.length
       ? dbMigrations[dbMigrations.length - 1].id
       : 0
-    for (const migration of migrations) {
-      if (migration.id > lastMigrationId) {
-        debug('applying migration %d', migration.id)
+    for (const { id, name, up, down, hash } of migrations) {
+      if (id > lastMigrationId) {
+        debug('applying migration %d', id)
         yield conn.query('begin')
         try {
-          yield conn.query(migration.up)
+          yield conn.query(up)
           yield conn.query(
-            `insert into "${table}" (id, name, up, down) values ($1, $2, $3, $4)`,
-            [migration.id, migration.name, migration.up, migration.down]
+            `insert into "${table}" (id, name, up, down, hash) values ($1, $2, $3, $4, $5)`,
+            [id, name, up, down, hash]
           )
           yield conn.query('commit')
         } catch (err) {
@@ -154,10 +177,14 @@ function migrate(
     debug('done')
   })
     .then(() => {
-      if (typeof cleanup === 'function') cleanup()
+      if (typeof cleanup === 'function') {
+        cleanup()
+      }
     })
     .catch(e => {
-      if (typeof cleanup === 'function') cleanup()
+      if (typeof cleanup === 'function') {
+        cleanup()
+      }
       throw e
     })
 }
