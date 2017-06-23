@@ -91,17 +91,17 @@ function migrate(
 
     debug('ensuring migration table (%s) exists', table)
     yield conn.query(
-      `CREATE TABLE IF NOT EXISTS "${table}" (
-        id   INTEGER PRIMARY KEY,
-        name TEXT    NOT NULL,
-        up   TEXT    NOT NULL,
-        down TEXT    NOT NULL
+      `create table if not exists "${table}" (
+        id integer primary key,
+        name text not null,
+        up text not null,
+        down text not null
       )`
     )
 
     debug('listing existing migrations ...')
     let dbMigrations = yield conn.query(
-      `SELECT id, name, up, down FROM "${table}" ORDER BY id ASC`
+      `select id, name, up, down from "${table}" order by id asc`
     )
     dbMigrations = dbMigrations.rows
     debug('... has %d migrations', dbMigrations.length)
@@ -113,16 +113,16 @@ function migrate(
         (force === 'last' && migration.id === lastMigration.id)
       ) {
         debug('rolling back migration %d', migration.id)
-        yield conn.query('BEGIN')
+        yield conn.query('begin')
         try {
           yield conn.query(migration.down)
-          yield conn.query(`DELETE FROM "${table}" WHERE id = $1`, [
+          yield conn.query(`delete from "${table}" where id = $1`, [
             migration.id,
           ])
-          yield conn.query('COMMIT')
+          yield conn.query('commit')
           dbMigrations = dbMigrations.filter(x => x.id !== migration.id)
         } catch (err) {
-          yield conn.query('ROLLBACK')
+          yield conn.query('rollback')
           throw err
         }
       } else {
@@ -136,16 +136,16 @@ function migrate(
     for (const migration of migrations) {
       if (migration.id > lastMigrationId) {
         debug('applying migration %d', migration.id)
-        yield conn.query('BEGIN')
+        yield conn.query('begin')
         try {
           yield conn.query(migration.up)
           yield conn.query(
-            `INSERT INTO "${table}" (id, name, up, down) VALUES ($1, $2, $3, $4)`,
+            `insert into "${table}" (id, name, up, down) values ($1, $2, $3, $4)`,
             [migration.id, migration.name, migration.up, migration.down]
           )
-          yield conn.query('COMMIT')
+          yield conn.query('commit')
         } catch (err) {
-          yield conn.query('ROLLBACK')
+          yield conn.query('rollback')
           throw err
         }
       }
