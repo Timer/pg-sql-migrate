@@ -12,6 +12,7 @@ function migrate(
     table = 'migrations',
     migrationsPath = './migrations',
     checkHash = false,
+    validateDown = true,
   } = {}
 ) {
   let conn
@@ -162,6 +163,10 @@ function migrate(
         yield conn.query('begin')
         try {
           yield conn.query(up)
+          if (validateDown) {
+            yield conn.query(down)
+            yield conn.query(up)
+          }
           yield conn.query(
             `insert into "${table}" (id, name, up, down, hash) values ($1, $2, $3, $4, $5)`,
             [id, name, up, down, hash]
