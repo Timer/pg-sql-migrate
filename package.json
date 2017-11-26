@@ -14,7 +14,7 @@
     "debug": "^2.6.1"
   },
   "peerDependencies": {
-    "pg": "^6.1.2"
+    "pg": "6.x || 7.x"
   },
   "devDependencies": {
     "babel-eslint": "^7.2.3",
