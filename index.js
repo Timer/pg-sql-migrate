@@ -107,6 +107,19 @@ function migrate(
       )`
     )
 
+    const hashColumnCount = yield conn
+      .query(
+        `select column_name from information_schema.columns where table_name = '${table}' and column_name = 'hash';`
+      )
+      .then(r => r.rows.length)
+
+    if (hashColumnCount < 1) {
+      yield conn.query(
+        `alter table "${table}" add column hash text not null default 'nil';`
+      )
+      yield conn.query(`alter table "${table}" alter column hash drop default;`)
+    }
+
     debug('listing existing migrations ...')
     let dbMigrations = yield conn.query(
       `select id, name, up, down, hash from "${table}" order by id asc`
@@ -120,7 +133,15 @@ function migrate(
       if (file == null) {
         continue
       }
-      if (file.hash !== hash && (firstMismatch === -1 || id < firstMismatch)) {
+      if (hash === 'nil') {
+        yield conn.query(`update "${table}" set hash = $1 where id = $2`, [
+          file.hash,
+          id,
+        ])
+      } else if (
+        file.hash !== hash &&
+        (firstMismatch === -1 || id < firstMismatch)
+      ) {
         firstMismatch = id
       }
     }
