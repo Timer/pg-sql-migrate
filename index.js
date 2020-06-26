@@ -4,21 +4,23 @@ const path = require('path')
 const debug = require('debug')('pg-sql-migrate')
 const crypto = require('crypto')
 
-function migrate({
-  client,
-  pool,
-  force = false,
-  table = 'migrations',
-  migrationsPath = './migrations',
-  checkHash = false,
-  validateDown = true,
-} = {}) {
+function migrate(
+  {
+    client,
+    pool,
+    force = false,
+    table = 'migrations',
+    migrationsPath = './migrations',
+    checkHash = false,
+    validateDown = true,
+  } = {}
+) {
   debug(
     'pg-sql-migrate has been renamed to meyer see: https://www.npmjs.com/package/meyer for the latest version'
   )
   let conn
   let cleanup
-  return co(function* () {
+  return co(function*() {
     if ((client && pool) || (!client && !pool)) {
       throw new Error('You must specify a client *OR* pool.')
     }
@@ -30,7 +32,7 @@ function migrate({
       cleanup = client.end.bind(client)
     } else if (pool) {
       yield new Promise((resolve, reject) => {
-        pool.connect(function (err, client, done) {
+        pool.connect(function(err, client, done) {
           if (err) {
             reject(err)
             return
@@ -55,9 +57,9 @@ function migrate({
         } else {
           resolve(
             files
-              .map((x) => x.match(/^(\d+).(.*?)\.sql$/))
-              .filter((x) => x !== null)
-              .map((x) => ({ id: Number(x[1]), name: x[2], filename: x[0] }))
+              .map(x => x.match(/^(\d+).(.*?)\.sql$/))
+              .filter(x => x !== null)
+              .map(x => ({ id: Number(x[1]), name: x[2], filename: x[0] }))
               .sort((a, b) => Math.sign(a.id - b.id))
           )
         }
@@ -71,7 +73,7 @@ function migrate({
     debug('loaded %d migrations', migrations.length)
     yield Promise.all(
       migrations.map(
-        (migration) =>
+        migration =>
           new Promise((resolve, reject) => {
             const filename = path.join(location, migration.filename)
             fs.readFile(filename, 'utf-8', (err, data) => {
@@ -112,7 +114,7 @@ function migrate({
       .query(
         `select column_name from information_schema.columns where table_name = '${table}' and column_name = 'hash';`
       )
-      .then((r) => r.rows.length)
+      .then(r => r.rows.length)
 
     if (hashColumnCount < 1) {
       yield conn.query(
@@ -130,7 +132,7 @@ function migrate({
 
     let firstMismatch = -1
     for (const { id, hash } of dbMigrations) {
-      const file = migrations.find((x) => x.id === id)
+      const file = migrations.find(x => x.id === id)
       if (file == null) {
         continue
       }
@@ -151,11 +153,12 @@ function migrate({
     }
 
     const lastMigration = migrations[migrations.length - 1]
-    for (const { id, down } of dbMigrations
-      .slice()
-      .sort((a, b) => Math.sign(b.id - a.id))) {
+    for (const {
+      id,
+      down,
+    } of dbMigrations.slice().sort((a, b) => Math.sign(b.id - a.id))) {
       if (
-        !migrations.some((x) => x.id === id) ||
+        !migrations.some(x => x.id === id) ||
         (checkHash && firstMismatch !== -1 && id >= firstMismatch) ||
         (force === 'last' && id === lastMigration.id)
       ) {
@@ -165,7 +168,7 @@ function migrate({
           yield conn.query(down)
           yield conn.query(`delete from "${table}" where id = $1`, [id])
           yield conn.query('commit')
-          dbMigrations = dbMigrations.filter((x) => x.id !== id)
+          dbMigrations = dbMigrations.filter(x => x.id !== id)
         } catch (err) {
           yield conn.query('rollback')
           throw err
@@ -207,7 +210,7 @@ function migrate({
         cleanup()
       }
     })
-    .catch((e) => {
+    .catch(e => {
       if (typeof cleanup === 'function') {
         cleanup()
       }
