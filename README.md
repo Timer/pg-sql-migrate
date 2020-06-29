@@ -1,4 +1,5 @@
 # Project moved
 
-Repo has been renamed and moved to https://github.com/Timer/meyer#readme  
-New package is being published at: https://www.npmjs.com/package/meyer
+Repository has been superseded by [meyer](https://github.com/Timer/meyer)
+
+To migrate switch to [meyer](https://www.npmjs.com/package/meyer) and [meyer-dbms-knex](https://www.npmjs.com/package/meyer-dbms-knex)

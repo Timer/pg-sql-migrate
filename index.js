@@ -16,7 +16,7 @@ function migrate(
   } = {}
 ) {
   debug(
-    'pg-sql-migrate has been renamed to meyer see: https://www.npmjs.com/package/meyer for the latest version'
+    'pg-sql-migrate has been superseded by meyer see: https://www.npmjs.com/package/meyer'
   )
   let conn
   let cleanup
