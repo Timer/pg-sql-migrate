@@ -15,6 +15,9 @@ function migrate(
     validateDown = true,
   } = {}
 ) {
+  debug(
+    'pg-sql-migrate has been superseded by meyer see: https://www.npmjs.com/package/meyer'
+  )
   let conn
   let cleanup
   return co(function*() {
